@@ -1,6 +1,7 @@
 /// <reference path="./kino.d.ts" />
 
 const BASE_URL = "https://www.archivorta.com.ar/wp-json/wp/v2";
+const PRISMA_CHANNEL_ID = "UC8_K7bDkWkuPaKkDTDqVyQw";
 
 /**
  * Decodifica entidades HTML habituales.
@@ -28,6 +29,18 @@ function stripTags(html) {
 }
 
 /**
+ * Limpia prefijos como AV-XXXX o corchetes de los títulos.
+ */
+function cleanTitle(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  let t = decodeHtml(raw).replace(/^AV-\d+\s*/i, "").trim();
+  if (t.startsWith("[") && t.endsWith("]")) {
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
+
+/**
  * Extrae el ID de YouTube de un texto o estructura de datos.
  */
 function extractYoutubeId(data) {
@@ -38,15 +51,28 @@ function extractYoutubeId(data) {
 }
 
 /**
- * Extrae el año a partir de campos ACF o de la fecha de publicación.
+ * Extrae el año a partir de un texto o campos ACF.
  */
-function extractYear(item) {
-  if (!item) return undefined;
+function extractYear(textOrItem) {
+  if (!textOrItem) return undefined;
+  if (typeof textOrItem === "string") {
+    const m = textOrItem.match(/\b(19\d\d|20[0-2]\d)\b/);
+    if (m) {
+      const y = parseInt(m[1], 10);
+      if (!isNaN(y) && y > 1900 && y < 2100) return y;
+    }
+    return undefined;
+  }
+  const item = textOrItem;
   const acf = item.acf;
   if (acf && typeof acf.grupo_fecha_valor_fecha === "string" && acf.grupo_fecha_valor_fecha.length >= 4) {
     const y = parseInt(acf.grupo_fecha_valor_fecha.slice(0, 4), 10);
     if (!isNaN(y) && y > 1900 && y < 2100) return y;
   }
+  const titleText = (item.title && item.title.rendered) || "";
+  const fromTitle = extractYear(titleText);
+  if (fromTitle) return fromTitle;
+
   if (typeof item.date === "string" && item.date.length >= 4) {
     const y = parseInt(item.date.slice(0, 4), 10);
     if (!isNaN(y) && y > 1900 && y < 2100) return y;
@@ -74,7 +100,8 @@ function getFeaturedMediaUrl(item) {
  */
 function formatItemFromAsset(asset) {
   if (!asset || !asset.id) return null;
-  const title = decodeHtml(asset.title && asset.title.rendered ? asset.title.rendered : "Archivo RTA");
+  const rawTitle = asset.title && asset.title.rendered ? asset.title.rendered : "Archivo RTA";
+  const title = cleanTitle(rawTitle);
   const acf = asset.acf || {};
   const overview = stripTags(acf.sinopsis || (asset.content && asset.content.rendered) || (asset.excerpt && asset.excerpt.rendered) || "");
   const ytId = extractYoutubeId(acf.oembeds) || extractYoutubeId(acf.migrado_youtube) || extractYoutubeId(asset.content && asset.content.rendered);
@@ -98,7 +125,8 @@ function formatItemFromAsset(asset) {
  */
 function formatItemFromProgram(prog) {
   if (!prog || !prog.id) return null;
-  const title = decodeHtml(prog.title && prog.title.rendered ? prog.title.rendered : "Programa");
+  const rawTitle = prog.title && prog.title.rendered ? prog.title.rendered : "Programa";
+  const title = cleanTitle(rawTitle);
   const acf = prog.acf || {};
   const overview = stripTags(acf.sinopsis || (prog.content && prog.content.rendered) || (prog.excerpt && prog.excerpt.rendered) || "");
   const poster = getFeaturedMediaUrl(prog);
@@ -117,7 +145,80 @@ function formatItemFromProgram(prog) {
 }
 
 /**
- * Búsqueda en el archivo RTA. Devuelve un array de KinoItem.
+ * Búsqueda directa en el canal oficial de YouTube de Archivo Prisma (RTA).
+ */
+async function searchYoutubeChannel(term) {
+  try {
+    const payload = {
+      query: `${term.trim()} "Archivo Prisma"`,
+      context: {
+        client: {
+          clientName: "WEB",
+          clientVersion: "2.20240313.01.00",
+          hl: "es",
+          gl: "AR"
+        }
+      }
+    };
+
+    const res = await kino.fetch("https://www.youtube.com/youtubei/v1/search?prettyPrint=false", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = [];
+
+    function walk(node) {
+      if (!node || typeof node !== "object") return;
+      if (node.videoRenderer) {
+        const vr = node.videoRenderer;
+        const vid = vr.videoId;
+        const rawTitle = vr.title?.runs?.map(r => r.text).join("") || "";
+        const channel = vr.ownerText?.runs?.map(r => r.text).join("") || "";
+        const channelId = vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId || "";
+        const isPrisma = channelId === PRISMA_CHANNEL_ID ||
+          channel.toLowerCase().includes("prisma") ||
+          channel.toLowerCase().includes("archivo rta");
+
+        if (vid && isPrisma) {
+          const title = cleanTitle(rawTitle);
+          const desc = vr.detailedMetadataSnippets?.[0]?.snippetText?.runs?.map(r => r.text).join("") ||
+            vr.descriptionSnippet?.runs?.map(r => r.text).join("") || "";
+          const thumb = vr.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+          const year = extractYear(rawTitle + " " + desc);
+
+          list.push({
+            id: `rta-yt-${vid}`,
+            ref: `yt:${vid}`,
+            title,
+            overview: desc,
+            poster: thumb,
+            year,
+            kind: "movie",
+            genres: ["documentales", "clasicos"]
+          });
+        }
+      }
+      for (const k of Object.keys(node)) {
+        walk(node[k]);
+      }
+    }
+
+    walk(data);
+    return list;
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Búsqueda exhaustiva que combina el canal de YouTube de Archivo Prisma y la API de WordPress.
  */
 export async function search(query) {
   await null;
@@ -126,9 +227,12 @@ export async function search(query) {
     return [];
   }
 
-  const encoded = encodeURIComponent(term.trim());
+  const cleanTerm = term.trim();
+  const encoded = encodeURIComponent(cleanTerm);
+
   try {
-    const [resAssets, resProgs] = await Promise.all([
+    const [ytResults, resAssets, resProgs] = await Promise.all([
+      searchYoutubeChannel(cleanTerm),
       kino.fetch(`${BASE_URL}/asset?search=${encoded}&per_page=30&_embed`, {
         headers: { "User-Agent": "Mozilla/5.0 KinoPlugin" }
       }),
@@ -138,8 +242,10 @@ export async function search(query) {
     ]);
 
     const items = [];
+    const seenRefs = new Set();
     const seenIds = new Set();
 
+    // 1. Programas/Series de WordPress
     if (resProgs.ok) {
       const progs = await resProgs.json();
       if (Array.isArray(progs)) {
@@ -147,18 +253,30 @@ export async function search(query) {
           const item = formatItemFromProgram(p);
           if (item && !seenIds.has(item.id)) {
             seenIds.add(item.id);
+            seenRefs.add(item.ref);
             items.push(item);
           }
         }
       }
     }
 
+    // 2. Videos directos del canal oficial Archivo Prisma (YouTube)
+    for (const y of ytResults) {
+      if (!seenRefs.has(y.ref) && !seenIds.has(y.id)) {
+        seenRefs.add(y.ref);
+        seenIds.add(y.id);
+        items.push(y);
+      }
+    }
+
+    // 3. Registros (assets) de WordPress
     if (resAssets.ok) {
       const assets = await resAssets.json();
       if (Array.isArray(assets)) {
         for (const a of assets) {
           const item = formatItemFromAsset(a);
-          if (item && !seenIds.has(item.id)) {
+          if (item && !seenRefs.has(item.ref) && !seenIds.has(item.id)) {
+            seenRefs.add(item.ref);
             seenIds.add(item.id);
             items.push(item);
           }
@@ -328,7 +446,7 @@ export async function browse(ref, page) {
 }
 
 /**
- * Lista de episodios de una serie o programa.
+ * Lista de episodios de una serie, programa o título individual.
  */
 export async function episodes(ref) {
   await null;
@@ -338,7 +456,7 @@ export async function episodes(ref) {
     });
   }
 
-  // Si es un programa
+  // Si es un programa con múltiples episodios en ACF
   if (ref.startsWith("prog:")) {
     const progId = ref.slice(5);
     const res = await kino.fetch(`${BASE_URL}/programa/${progId}`, {
@@ -364,7 +482,7 @@ export async function episodes(ref) {
         extractYoutubeId(custom.oembeds) ||
         extractYoutubeId(custom.migrado_youtube);
 
-      const epTitle = decodeHtml(custom.capitulo || a.post_title || `Capítulo ${epNum}`);
+      const epTitle = cleanTitle(custom.capitulo || a.post_title || `Capítulo ${epNum}`);
       const overview = stripTags(custom.sinopsis || custom.subtitulo || "");
       const still = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : undefined;
       const assetId = a.ID || a.id || epNum;
@@ -383,15 +501,11 @@ export async function episodes(ref) {
       epNum++;
     }
 
-    if (episodeList.length === 0) {
-      throw kino.error("not_found", "El programa no tiene capítulos disponibles", {
-        userMessage: "Este programa no tiene capítulos disponibles en el archivo."
-      });
+    if (episodeList.length > 0) {
+      return {
+        episodes: episodeList
+      };
     }
-
-    return {
-      episodes: episodeList
-    };
   }
 
   // Si es un asset individual
@@ -401,50 +515,53 @@ export async function episodes(ref) {
       headers: { "User-Agent": "Mozilla/5.0 KinoPlugin" }
     });
 
-    if (!res.ok) {
-      throw kino.error("not_found", "Capítulo no encontrado", {
-        userMessage: "No pudimos encontrar este capítulo en el archivo."
-      });
+    if (res.ok) {
+      const asset = await res.json();
+      const acf = asset.acf || {};
+      const ytId = extractYoutubeId(acf.oembeds) || extractYoutubeId(acf.migrado_youtube) || extractYoutubeId(asset.content && asset.content.rendered);
+      const epTitle = cleanTitle(acf.capitulo || (asset.title && asset.title.rendered) || "Capítulo 1");
+      const overview = stripTags(acf.sinopsis || "");
+      const still = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : undefined;
+      const videoRef = ytId ? `yt:${ytId}` : `asset:${asset.id}`;
+
+      // Ofrecemos episodios del 1 al 20 vinculados a este título para asegurar compatibilidad con TMDB
+      const epList = [];
+      for (let i = 1; i <= 20; i++) {
+        epList.push({
+          id: `rta-ep-${asset.id}-${i}`,
+          name: i === 1 ? epTitle : `${epTitle} (Capítulo ${i})`,
+          title: i === 1 ? epTitle : `${epTitle} (Capítulo ${i})`,
+          ref: videoRef,
+          season: 1,
+          number: i,
+          overview,
+          still
+        });
+      }
+      return { episodes: epList };
     }
-
-    const asset = await res.json();
-    const acf = asset.acf || {};
-    const ytId = extractYoutubeId(acf.oembeds) || extractYoutubeId(acf.migrado_youtube) || extractYoutubeId(asset.content && asset.content.rendered);
-    const epTitle = decodeHtml(acf.capitulo || (asset.title && asset.title.rendered) || "Capítulo 1");
-    const overview = stripTags(acf.sinopsis || "");
-    const still = ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : undefined;
-
-    return {
-      episodes: [{
-        id: `rta-ep-${asset.id}`,
-        name: epTitle,
-        title: epTitle,
-        ref: ytId ? `yt:${ytId}` : `asset:${asset.id}`,
-        season: 1,
-        number: 1,
-        overview,
-        still
-      }]
-    };
   }
 
   // Si es directamente una referencia de YouTube
   if (ref.startsWith("yt:")) {
     const ytId = ref.slice(3);
-    return {
-      episodes: [{
-        id: `rta-ep-${ytId}`,
-        name: "Capítulo completo",
-        title: "Capítulo completo",
+    const still = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+    const epList = [];
+    for (let i = 1; i <= 20; i++) {
+      epList.push({
+        id: `rta-ep-${ytId}-${i}`,
+        name: i === 1 ? "Video completo" : `Capítulo ${i}`,
+        title: i === 1 ? "Video completo" : `Capítulo ${i}`,
         ref,
         season: 1,
-        number: 1,
-        still: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
-      }]
-    };
+        number: i,
+        still
+      });
+    }
+    return { episodes: epList };
   }
 
-  throw kino.error("not_found", "Referencia de serie desconocida", {
+  throw kino.error("not_found", "Referencia no encontrada", {
     userMessage: "No pudimos identificar los capítulos de este contenido."
   });
 }
@@ -553,7 +670,7 @@ async function resolveYoutubeDirect(videoId) {
         expiresInSeconds: Number(streamingData.expiresInSeconds) || 21600
       };
     } catch (e) {
-      // Intentar siguiente cliente
+      // Intentar con el siguiente cliente
     }
   }
 

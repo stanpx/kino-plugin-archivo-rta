@@ -1,7 +1,7 @@
 {
   "id": "archivo-rta",
   "name": "Archivo RTA",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": 5,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -33,6 +33,6 @@
   ],
   "signature": {
     "authorKey": "6f5fc734f744d974a1fe0c21a0e7edf6e0c9ff2e35a01ffc12d9abad629d55ef",
-    "value": "16204c879c2ffbb6e505910b6561097609e4e3dd72c035ceea7d50e5ca21aa3de3a2193513e54678abcb496dc39d4bb5681821d5fb206fa9b60ed6503083df00"
+    "value": "4c2bcfe8efd133e2ba8c735d11434a9f653433ed514e4dad2693fa60cf43479a140004f229576d5c71d6c5c45533a3dd4c9e7d6d7838813f4d1b2d671338f809"
   }
 }
