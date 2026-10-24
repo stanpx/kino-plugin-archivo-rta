@@ -450,7 +450,118 @@ export async function episodes(ref) {
 }
 
 /**
- * Resuelve la reproducción delegando a la aplicación resolutora de YouTube.
+ * Resuelve la URL directa del video en YouTube usando la API de Innertube (cliente Android).
+ */
+async function resolveYoutubeDirect(videoId) {
+  const clients = [
+    {
+      clientName: "ANDROID",
+      clientVersion: "20.10.38",
+      deviceMake: "Google",
+      deviceModel: "Pixel 8",
+      osName: "Android",
+      osVersion: "14",
+      androidSdkVersion: 34,
+      userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip"
+    },
+    {
+      clientName: "ANDROID_VR",
+      clientVersion: "1.61.48",
+      deviceMake: "Oculus",
+      deviceModel: "Quest 3",
+      osName: "Android",
+      osVersion: "12L",
+      androidSdkVersion: 32,
+      userAgent: "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
+    }
+  ];
+
+  for (const client of clients) {
+    try {
+      const payload = {
+        videoId,
+        context: {
+          client: {
+            clientName: client.clientName,
+            clientVersion: client.clientVersion,
+            deviceMake: client.deviceMake,
+            deviceModel: client.deviceModel,
+            osName: client.osName,
+            osVersion: client.osVersion,
+            androidSdkVersion: client.androidSdkVersion,
+            hl: "es",
+            gl: "AR"
+          }
+        },
+        contentCheckOk: true,
+        racyCheckOk: true
+      };
+
+      const res = await kino.fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": client.userAgent
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) continue;
+      const data = await res.json();
+      const streamingData = data && data.streamingData;
+      if (!streamingData) continue;
+
+      const formats = Array.isArray(streamingData.formats) ? streamingData.formats : [];
+      const progFormats = formats
+        .filter(f => f && typeof f.url === "string" && f.url.startsWith("https://"))
+        .sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
+
+      if (progFormats.length === 0) continue;
+
+      const best = progFormats[0];
+      const mime = String(best.mimeType || "").split(";")[0].trim() || "video/mp4";
+      const alternatives = progFormats.slice(1).map(f => ({
+        url: f.url,
+        mime: String(f.mimeType || "").split(";")[0].trim() || "video/mp4",
+        headers: { "User-Agent": client.userAgent },
+        label: `${f.qualityLabel || (f.height + "p")} MP4`
+      }));
+
+      const subList = [];
+      const captionTracks = data.captions && data.captions.playerCaptionsTracklistRenderer && data.captions.playerCaptionsTracklistRenderer.captionTracks;
+      if (Array.isArray(captionTracks)) {
+        for (const tr of captionTracks) {
+          if (tr && typeof tr.baseUrl === "string") {
+            const label = (tr.name && tr.name.simpleText) || tr.languageCode || "Subtítulo";
+            subList.push({
+              lang: tr.languageCode || "es",
+              label,
+              url: `${tr.baseUrl}&fmt=vtt`,
+              format: "vtt"
+            });
+          }
+        }
+      }
+
+      return {
+        url: best.url,
+        mime,
+        headers: { "User-Agent": client.userAgent },
+        subtitles: subList.length > 0 ? subList : undefined,
+        alternatives: alternatives.length > 0 ? alternatives : undefined,
+        expiresInSeconds: Number(streamingData.expiresInSeconds) || 21600
+      };
+    } catch (e) {
+      // Intentar siguiente cliente
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resuelve la reproducción directa para Kino.
  */
 export async function resolve(ref) {
   await null;
@@ -460,19 +571,12 @@ export async function resolve(ref) {
     });
   }
 
+  let targetYtId = null;
+
   // Referencia directa de YouTube
   if (ref.startsWith("yt:")) {
-    const ytId = ref.slice(3);
-    return {
-      external: {
-        protocol: "youtube",
-        ref: ytId
-      }
-    };
-  }
-
-  // Referencia a un asset
-  if (ref.startsWith("asset:")) {
+    targetYtId = ref.slice(3);
+  } else if (ref.startsWith("asset:")) {
     const assetId = ref.slice(6);
     const res = await kino.fetch(`${BASE_URL}/asset/${assetId}`, {
       headers: { "User-Agent": "Mozilla/5.0 KinoPlugin" }
@@ -486,26 +590,10 @@ export async function resolve(ref) {
 
     const asset = await res.json();
     const acf = asset.acf || {};
-    const ytId = extractYoutubeId(acf.oembeds) ||
+    targetYtId = extractYoutubeId(acf.oembeds) ||
       extractYoutubeId(acf.migrado_youtube) ||
       extractYoutubeId(asset.content && asset.content.rendered);
-
-    if (ytId) {
-      return {
-        external: {
-          protocol: "youtube",
-          ref: ytId
-        }
-      };
-    }
-
-    throw kino.error("not_found", "Video no digitalizado", {
-      userMessage: "Este registro histórico aún no cuenta con un video digitalizado disponible."
-    });
-  }
-
-  // Referencia a un programa
-  if (ref.startsWith("prog:")) {
+  } else if (ref.startsWith("prog:")) {
     const progId = ref.slice(5);
     const res = await kino.fetch(`${BASE_URL}/programa/${progId}`, {
       headers: { "User-Agent": "Mozilla/5.0 KinoPlugin" }
@@ -521,22 +609,21 @@ export async function resolve(ref) {
           extractYoutubeId(custom.oembeds) ||
           extractYoutubeId(custom.migrado_youtube);
         if (ytId) {
-          return {
-            external: {
-              protocol: "youtube",
-              ref: ytId
-            }
-          };
+          targetYtId = ytId;
+          break;
         }
       }
     }
-
-    throw kino.error("not_found", "Programa sin video disponible", {
-      userMessage: "Este programa no cuenta con videos reproducibles en el archivo."
-    });
   }
 
-  throw kino.error("not_found", "Tipo de contenido desconocido", {
-    userMessage: "No pudimos reproducir este contenido."
+  if (targetYtId) {
+    const stream = await resolveYoutubeDirect(targetYtId);
+    if (stream) {
+      return stream;
+    }
+  }
+
+  throw kino.error("not_found", "Video no disponible", {
+    userMessage: "Este video no se encuentra disponible para reproducción en este momento."
   });
 }
