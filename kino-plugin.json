@@ -1,0 +1,31 @@
+{
+  "id": "archivo-rta",
+  "name": "Archivo RTA",
+  "version": "0.1.0",
+  "apiVersion": 11,
+  "entry": "plugin.js",
+  "icon": "icon.png",
+  "description": "Contenido histórico de Radio y Televisión Argentina",
+  "author": "stanpx",
+  "homepage": "https://github.com/stanpx/kino-plugin-archivo-rta",
+  "hosts": [
+    "www.archivorta.com.ar",
+    "archivorta.com.ar"
+  ],
+  "categories": [
+    "movies",
+    "series"
+  ],
+  "capabilities": [
+    "search",
+    "home",
+    "browse",
+    "episodes",
+    "resolve",
+    "externalResolve"
+  ],
+  "signature": {
+    "authorKey": "6f5fc734f744d974a1fe0c21a0e7edf6e0c9ff2e35a01ffc12d9abad629d55ef",
+    "value": "e16165db7921ee040951bf9f50f0c64ecc8e4c60afb1efd750302e809f3fa1e63194babc795bccca049ea2238e410a8ba75d036a9d728b4f0bd5288a74203201"
+  }
+}
