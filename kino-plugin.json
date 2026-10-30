@@ -1,22 +1,33 @@
 {
   "id": "archivo-rta",
   "name": "Archivo RTA",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "apiVersion": 5,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "Contenido histórico de Radio y Televisión Argentina",
+  "description": "Contenido histórico de Radio y Televisión Argentina (Archivo RTA, TV Pública, Encuentro, Pakapaka, DeporTV y Noticias)",
   "author": "stanpx",
   "homepage": "https://github.com/stanpx/kino-plugin-archivo-rta",
   "hosts": [
     "www.archivorta.com.ar",
     "archivorta.com.ar",
+    "www.youtube.com",
     "youtube.com",
     "*.youtube.com",
     "youtu.be",
-    "i.ytimg.com",
     "*.ytimg.com",
-    "*.googlevideo.com"
+    "*.googlevideo.com",
+    "invidious.nerdvpn.de",
+    "inv.nadeko.net",
+    "invidious.tiekoetter.com",
+    "cf.piped.video",
+    "*.piped.video",
+    "piped.ducks.party",
+    "*.ducks.party",
+    "piped.kavin.rocks",
+    "*.kavin.rocks",
+    "piped.wireway.ch",
+    "*.wireway.ch"
   ],
   "streamHosts": "any",
   "categories": [
@@ -33,6 +44,6 @@
   ],
   "signature": {
     "authorKey": "6f5fc734f744d974a1fe0c21a0e7edf6e0c9ff2e35a01ffc12d9abad629d55ef",
-    "value": "4c2bcfe8efd133e2ba8c735d11434a9f653433ed514e4dad2693fa60cf43479a140004f229576d5c71d6c5c45533a3dd4c9e7d6d7838813f4d1b2d671338f809"
+    "value": "e874eb8ffcc492a5938353e6563ebbc5fe6d989edd75b638701f6b28500934e2e0e6412ac4e089d0b1c3b8e83d86cc65381bec78616e776d4e98a0fef765d407"
   }
 }

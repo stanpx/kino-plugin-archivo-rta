@@ -1,14 +1,25 @@
 # Archivo RTA (Plugin para Kino)
 
-Plugin para [Kino](https://kinotvapp.github.io/kino-plugins/) que permite explorar el acervo histórico audiovisual de Radio y Televisión Argentina (Archivo RTA / Archivo Prisma).
+Plugin para [Kino](https://kinotvapp.github.io/kino-plugins/) que permite explorar el acervo histórico audiovisual de Radio y Televisión Argentina (`archivorta.com.ar` / Archivo Prisma) junto con los canales oficiales exclusivos del ecosistema público argentino.
 
-## Contenido
+## Contenido y Canales Exclusivos
 
-- **Documentales**: Material histórico, ciclos culturales e informes especiales.
-- **Series y Programas**: Ciclos documentales y teleteatros clásicos de la TV Pública.
-- **Archivo Histórico**: Momentos clave, noticieros de época y registros institucionales.
-- **Ficción**: Teleteatros y obras dramáticas del archivo.
-- **Espectáculo y Música**: Entrevistas, conciertos y figuras de la cultura argentina.
+- **Catálogo de referencia (`archivorta.com.ar`)**:
+  - **Documentales**: Material histórico, ciclos culturales e informes especiales.
+  - **Series y Programas**: Ciclos documentales y teleteatros clásicos de la TV Pública.
+  - **Archivo Histórico**: Momentos clave, noticieros de época y registros institucionales.
+  - **Ficción**: Teleteatros y obras dramáticas del archivo.
+  - **Espectáculo y Música**: Entrevistas, conciertos y figuras de la cultura argentina.
+  - **Últimas actualizaciones**: Novedades y registros recientemente actualizados en `archivorta.com.ar`.
+- **Canales Oficiales Exclusivos**:
+  - **Archivo Prisma RTA** (`UC8_K7bDkWkuPaKkDTDqVyQw`)
+  - **Canal 7 Argentina / TV Pública** (`UCs231K71Bnu5295_x0MB5Pg`)
+  - **Canal Encuentro** (`UC1zLDoKL-eKmd_K7qkUZ-ow`)
+  - **TV Pública Noticias / Mundo Siete** (`UCqmZBc7T8J5TFuRT5uf-j_g`)
+  - **Pakapaka** (`UCVVNYxncuD4EfHpKDlPIYcQ`)
+  - **DeporTV** (`UCSmh3DFxBwFurMttT60PQ1g`)
+- **Resiliencia (Plan B ante caída de YouTube)**:
+  - Respaldo automático mediante espejos de **Invidious** (`invidious.nerdvpn.de`, `inv.nadeko.net`, `invidious.tiekoetter.com`) y **Piped** (`cf.piped.video`, `piped.ducks.party`, `piped.kavin.rocks`, `piped.wireway.ch`), manteniendo siempre el filtrado estricto a los 6 canales oficiales.
 
 ## Instalación en Kino
 
